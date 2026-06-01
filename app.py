@@ -24,7 +24,6 @@ def color_pnl_column(val):
 # --- 1. WELCOME / LANDING PAGE VIEW ---
 if not st.session_state["shop_opened"]:
     st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align: center; font-family: Georgia; color: #1a9641;'>🏪 Welcome to Vedhi Finance Nifty50 Shop</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray; font-size: 1.2em;'>Quality Nifty 50 stocks at a discount. Buy low, sell high, keep the spread</p>", unsafe_allow_html=True)
     
     # Cloud-ready relative path
