@@ -87,7 +87,7 @@ else:
 
     # --- SCREENER LOGIC ---
     if menu == "Stock Screener":
-        st.header("🔍 Strategy Screener")
+        st.subheader("🔍 Strategy Screener")
         
         scr_tab1, scr_tab2, scr_tab3 = st.tabs(["📈 Nifty 50 Stocks", "🪙 Gold & Silver", "📊 ETFs Screener"])
         
@@ -197,7 +197,7 @@ else:
 
     # --- PORTFOLIO TRACKER LOGIC ---
     elif menu == "Portfolio Tracker":
-        st.header("💼 Interactive Portfolio Tracker")
+        st.subheader("💼 Interactive Portfolio Tracker")
         
         HOLDINGS_FILE = "portfolio_holdings.csv"
         HISTORY_FILE = "portfolio_history.csv"
@@ -327,7 +327,7 @@ else:
 
     # --- SECTOR HEAT MAP LOGIC ---
     elif menu == "Sector Heat Map":
-        st.header("🗺️ Nifty 50 Sector Heat Map")
+        st.subheader("🗺️ Nifty 50 Sector Heat Map")
         NIFTY_SECTORS = {
             "Financials": ["HDFCBANK.NS", "ICICIBANK.NS", "AXISBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "HDFCLIFE.NS", "SBILIFE.NS", "SHRIRAMFIN.NS", "JIOFIN.NS"],
             "IT": ["INFY.NS", "TCS.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS"],
