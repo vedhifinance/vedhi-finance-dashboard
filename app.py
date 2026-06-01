@@ -93,7 +93,7 @@ else:
         
         # TAB 1: NIFTY 50
         with scr_tab1:
-            st.subheader("Nifty 50 Momentum Strategy")
+            st.subheader("Nifty 50 & ETF & Metal Momentum Strategy")
             if st.button("Run Nifty Screener", key="run_nifty"):
                 buy_signals = []
                 with st.spinner("Scanning Nifty 50 stocks... This may take a minute."):
