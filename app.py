@@ -6,14 +6,28 @@ import os
 import plotly.express as px 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from curl_cffi import requests as cffi_requests
+import time
 
-st.set_page_config(page_title="Nifty 50 Strategy Dashboard", layout="wide")
+st.set_page_config(page_title="Nifty 50 Strategy Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SESSION STATE FOR LANDING PAGE ---
+# --- CUSTOM CSS TO PUSH UI TO TOP ---
+st.markdown("""
+    <style>
+           .block-container {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+            }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- SESSION STATES ---
 if "shop_opened" not in st.session_state:
     st.session_state["shop_opened"] = False
 
-# Helper function to color-code profit (Green) and loss (Red)
+if "current_page" not in st.session_state:
+    st.session_state["current_page"] = "Stock Screener"
+
 def color_pnl_column(val):
     if val > 0:
         return 'color: #1a9641; font-weight: bold;'
@@ -21,12 +35,44 @@ def color_pnl_column(val):
         return 'color: #d7191c; font-weight: bold;'
     return ''
 
+# --- HELPER FUNCTIONS ---
+def get_live_pcr(symbol):
+    """
+    Scrapes the NSE website for real-time Options Chain data using curl_cffi 
+    to bypass strict TLS fingerprinting firewalls.
+    """
+    clean_symbol = symbol.replace(".NS", "").replace("^NSEI", "NIFTY")
+    
+    if clean_symbol == "NIFTY":
+        url = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+    else:
+        clean_symbol = clean_symbol.replace("&", "%26")
+        url = f"https://www.nseindia.com/api/option-chain-equities?symbol={clean_symbol}"
+        
+    try:
+        session = cffi_requests.Session(impersonate="chrome120")
+        session.get("https://www.nseindia.com", timeout=10)
+        time.sleep(1) 
+        
+        response = session.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'filtered' in data and 'CE' in data['filtered'] and 'PE' in data['filtered']:
+                tot_ce_oi = data['filtered']['CE']['totOI']
+                tot_pe_oi = data['filtered']['PE']['totOI']
+                if tot_ce_oi > 0:
+                    return round(tot_pe_oi / tot_ce_oi, 2)
+    except Exception:
+        pass
+    
+    return "N/A"
+
 # --- 1. WELCOME / LANDING PAGE VIEW ---
 if not st.session_state["shop_opened"]:
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; font-family: Georgia; color: #1a9641; margin-top: 20px;'>🏪 Vedhi Finance-Nifty50 Shop</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: gray; font-size: 1.2em;'>Quality Nifty 50 stocks at a discount. Buy low, sell high, keep the spread</p>", unsafe_allow_html=True)
     
-    # Cloud-ready relative path
     image_path = "shop_image.png.png"
     
     col_left, col_mid, col_right = st.columns([1, 8, 1])
@@ -39,36 +85,41 @@ if not st.session_state["shop_opened"]:
                 <div style='border: 2px dashed #1a9641; padding: 50px; text-align: center; border-radius: 10px; background-color: #1e1e1e;'>
                     <span style='font-size: 3em;'>🏪</span><br>
                     <p style='color: #ffffff; margin-top: 10px;'><b>[ Place your 'shop_image' in the project folder ]</b></p>
-                    <p style='color: gray; font-size: 0.9em;'>Image showing a staircase layout will display right here.</p>
                 </div>
                 """, 
                 unsafe_allow_html=True
             )
         
         st.markdown("<br>", unsafe_allow_html=True)
-        
         if st.button("🚪 Open the Shop", width="stretch"):
             st.session_state["shop_opened"] = True
             st.rerun()
-            
-    st.markdown("<p style='text-align: center; color: #555; font-size: 0.8em; margin-top: 30px;'>Click the steps above to unlock the trading terminal.</p>", unsafe_allow_html=True)
 
-# --- 2. MAIN DASHBOARD VIEW (OPENS AFTER CLICKING) ---
+# --- 2. MAIN DASHBOARD VIEW ---
 else:
-    # --- COMPACT HEADER ---
-    st.markdown(
-        """
-        <h3 style='font-family: "Georgia", serif; color: #1a9641; margin-top: -40px;'>
-            Vedhi Finance <span style='font-size: 0.8em; color: #cccccc;'>| 📈 Nifty 50 Strategy</span>
-        </h3>
-        <hr style='margin-top: 5px; margin-bottom: 15px;'>
-        """, 
-        unsafe_allow_html=True
-    )
+    # Header and Exit Button minimized to save vertical space
+    colA, colB = st.columns([9, 1])
+    with colA:
+        st.markdown("<h4 style='color: #1a9641; margin-top: -10px; margin-bottom: 0px;'>Vedhi Finance | 📈 Nifty 50 Strategy</h4>", unsafe_allow_html=True)
+    with colB:
+        if st.button("🔒 Exit"):
+            st.session_state["shop_opened"] = False
+            st.rerun()
 
-    if st.sidebar.button("🔒 Close Terminal / Exit"):
-        st.session_state["shop_opened"] = False
-        st.rerun()
+    st.markdown("<hr style='margin-top: 5px; margin-bottom: 5px;'>", unsafe_allow_html=True)
+
+    # --- TOP BUTTON NAVIGATION BAR ---
+    nav1, nav2, nav3, nav4 = st.columns(4)
+    with nav1:
+        if st.button("🔍 Stock Screener", width="stretch"): st.session_state["current_page"] = "Stock Screener"
+    with nav2:
+        if st.button("💼 Portfolio Tracker", width="stretch"): st.session_state["current_page"] = "Portfolio Tracker"
+    with nav3:
+        if st.button("🗺️ Sector Heat Map", width="stretch"): st.session_state["current_page"] = "Sector Heat Map"
+    with nav4:
+        if st.button("📈 Charts", width="stretch"): st.session_state["current_page"] = "Charts"
+        
+    menu = st.session_state["current_page"]
 
     NIFTY50_TICKERS = [
         "ADANIENT.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "AXISBANK.NS",
@@ -83,59 +134,54 @@ else:
         "TITAN.NS", "TMPV.NS", "TRENT.NS", "ULTRACEMCO.NS", "WIPRO.NS"
     ]
 
-    menu = st.sidebar.radio("Go to:", ["Stock Screener", "Portfolio Tracker", "Sector Heat Map", "Charts", "Live TV"])
-
     # --- SCREENER LOGIC ---
     if menu == "Stock Screener":
-        st.subheader("🔍 Strategy Screener")
+        scr_tab1, scr_tab2, scr_tab3 = st.tabs(["📈 Nifty 50 Stocks", "📊 Gold & Silver", "📊 ETFs Screener"])
         
-        scr_tab1, scr_tab2, scr_tab3 = st.tabs(["📈 Nifty 50 Stocks", "🪙 Gold & Silver", "📊 ETFs Screener"])
-        
-        # TAB 1: NIFTY 50
         with scr_tab1:
-            st.subheader("Nifty 50 & ETF & Metal Momentum Strategy")
             if st.button("Run Nifty Screener", key="run_nifty"):
                 buy_signals = []
-                with st.spinner("Scanning Nifty 50 stocks... This may take a minute."):
+                with st.spinner("Scanning Nifty 50 stocks..."):
                     for ticker in NIFTY50_TICKERS:
                         try:
                             df = yf.Ticker(ticker).history(period="6mo")
-                            if len(df) < 20: continue
+                            if len(df) < 50: continue
                             
                             df['EMA_20'] = ta.ema(df['Close'], length=20)
                             df['EMA_50'] = ta.ema(df['Close'], length=50)
                             df['RSI_14'] = ta.rsi(df['Close'], length=14)
                             df['Avg_Vol_20'] = df['Volume'].rolling(window=20).mean()
                             
-                            prev_row = df.iloc[-2]  
-                            latest_row = df.iloc[-1] 
-                            
+                            prev_row, latest_row = df.iloc[-2], df.iloc[-1]
                             prev_open, prev_close = float(prev_row['Open']), float(prev_row['Close'])
                             current_close, current_vol = float(latest_row['Close']), float(latest_row['Volume'])
+                            
                             avg_vol = float(latest_row['Avg_Vol_20'])
-                            ema_20, rsi_14 = float(latest_row['EMA_20']), float(latest_row['RSI_14'])
+                            ema_20 = float(latest_row['EMA_20'])
+                            ema_50 = float(latest_row['EMA_50'])
+                            rsi_14 = float(latest_row['RSI_14'])
                             
-                            if current_close < ema_20 and rsi_14 < 40 and (prev_close > prev_open) and (current_vol > avg_vol):
+                            if current_close < ema_20 and current_close > ema_50 and rsi_14 < 40 and (prev_close > prev_open) and (current_vol > avg_vol):
                                 buy_signals.append({
-                                    "Ticker": ticker.replace(".NS", ""),
-                                    "Price": round(current_close, 2),
-                                    "20 EMA": round(ema_20, 2),
-                                    "RSI": round(rsi_14, 2),
-                                    "Volume": f"{int(current_vol):,}",
-                                    "Avg Vol (20d)": f"{int(avg_vol):,}"
+                                    "Ticker": ticker.replace(".NS", ""), "Price": round(current_close, 2),
+                                    "20 EMA": round(ema_20, 2), "50 EMA": round(ema_50, 2), "RSI": round(rsi_14, 2),
+                                    "Volume": f"{int(current_vol):,}", "Avg Vol (20d)": f"{int(avg_vol):,}"
                                 })
-                        except:
-                            continue
-                            
+                        except: continue
                 if buy_signals:
-                    st.success(f"Found {len(buy_signals)} stocks matching criteria!")
-                    st.dataframe(pd.DataFrame(buy_signals), width="stretch")
-                else:
-                    st.warning("No stocks currently meet the criteria.")
+                    st.success(f"Found {len(buy_signals)} stocks matching the setup!")
+                    st.dataframe(pd.DataFrame(buy_signals), hide_index=True, width="stretch")
+                else: st.warning("No stocks currently meet the criteria.")
+            
+            st.markdown("---")
+            st.markdown("### 📋 Screener Rules Summary")
+            crit_col1, crit_col2, crit_col3, crit_col4 = st.columns(4)
+            crit_col1.markdown("**1. Pullback Check:**\nPrice pulled below **20 EMA** but safely above **50 EMA**.")
+            crit_col2.markdown("**2. RSI Level:**\n**RSI (14)** calculation value must be strictly below **40**.")
+            crit_col3.markdown("**3. Price Action:**\nPrevious day's candle must be bullish (**Close > Open**).")
+            crit_col4.markdown("**4. Volume Surge:**\nCurrent volume must exceed its **20-day average**.")
         
-        # TAB 2: GOLD & SILVER
         with scr_tab2:
-            st.subheader("🪙 Precious Metals Setup")
             METAL_TICKERS = ["GOLDBEES.NS", "SILVERBEES.NS"]
             if st.button("Scan Gold & Silver", key="run_metals"):
                 metal_signals = []
@@ -144,28 +190,20 @@ else:
                         try:
                             df = yf.Ticker(ticker).history(period="6mo")
                             df['EMA_50'] = ta.ema(df['Close'], length=50)
-                            latest = df.iloc[-1]
-                            
-                            close_p = float(latest['Close'])
-                            ema50 = float(latest['EMA_50'])
-                            
-                            if close_p > ema50: status = "🟢 Above 50 EMA"
-                            else: status = "🔴 Below 50 EMA"
-                                
+                            close_p, ema50 = float(df.iloc[-1]['Close']), float(df.iloc[-1]['EMA_50'])
+                            status = "🟢 Above 50 EMA" if close_p > ema50 else "🔴 Below 50 EMA"
                             metal_signals.append({
-                                "Asset": "Gold" if "GOLD" in ticker else "Silver",
-                                "Ticker": ticker.replace(".NS", ""),
-                                "Live Price": round(close_p, 2),
-                                "50 EMA": round(ema50, 2),
-                                "Status": status
+                                "Asset": "Gold" if "GOLD" in ticker else "Silver", "Ticker": ticker.replace(".NS", ""),
+                                "Live Price": round(close_p, 2), "50 EMA": round(ema50, 2), "Status": status
                             })
                         except: continue
-                if metal_signals:
-                    st.dataframe(pd.DataFrame(metal_signals), width="stretch")
+                if metal_signals: st.dataframe(pd.DataFrame(metal_signals), hide_index=True, width="stretch")
+            
+            st.markdown("---")
+            st.markdown("### 📋 Metals Rule Summary")
+            st.markdown("🔍 Tracks structural momentum: **🟢 Status** highlights long-term buyers defending the **50 EMA line**.")
 
-        # TAB 3: ETFS
         with scr_tab3:
-            st.subheader("📊 Elite ETF Scanner")
             TARGET_ETFS = ["PSUBNKBEES.NS", "BANKBEES.NS", "JUNIORBEES.NS"] 
             if st.button("Run ETF Screener", key="run_etfs"):
                 etf_signals = []
@@ -173,32 +211,28 @@ else:
                     for ticker in TARGET_ETFS:
                         try:
                             df = yf.Ticker(ticker).history(period="6mo")
-                            df['EMA_20'] = ta.ema(df['Close'], length=20)
-                            df['RSI_14'] = ta.rsi(df['Close'], length=14)
-                            
-                            latest = df.iloc[-1]
-                            close, ema20, rsi = float(latest['Close']), float(latest['EMA_20']), float(latest['RSI_14'])
-                            
+                            df['EMA_20'], df['RSI_14'] = ta.ema(df['Close'], length=20), ta.rsi(df['Close'], length=14)
+                            close, ema20, rsi = float(df.iloc[-1]['Close']), float(df.iloc[-1]['EMA_20']), float(df.iloc[-1]['RSI_14'])
                             action = "Watching"
                             if close < ema20 and rsi <= 40: action = "🔥 DOUBLE SIGNAL"
                             elif close < ema20: action = "📉 Pullback Zone"
                             elif rsi <= 40: action = "🔄 RSI Reversal"
-                                    
                             etf_signals.append({
-                                "ETF Name": ticker.replace(".NS", ""),
-                                "Live Price": round(close, 2),
-                                "20 EMA": round(ema20, 2),
-                                "RSI (14)": round(rsi, 2),
-                                "Status": action
+                                "ETF Name": ticker.replace(".NS", ""), "Live Price": round(close, 2),
+                                "20 EMA": round(ema20, 2), "RSI (14)": round(rsi, 2), "Status": action
                             })
                         except: continue
-                if etf_signals:
-                    st.dataframe(pd.DataFrame(etf_signals), width="stretch")
+                if etf_signals: st.dataframe(pd.DataFrame(etf_signals), hide_index=True, width="stretch")
+            
+            st.markdown("---")
+            st.markdown("### 📋 ETF Rules Summary")
+            etf_col1, etf_col2, etf_col3 = st.columns(3)
+            etf_col1.markdown("**📉 Pullback Zone:**\nPrice crosses below the structural **20 EMA line**.")
+            etf_col2.markdown("**🔄 RSI Reversal:**\nOversold metric detected where **RSI (14) <= 40**.")
+            etf_col3.markdown("**🔥 DOUBLE SIGNAL:**\nHigh probability setup matching **both** criteria above.")
 
     # --- PORTFOLIO TRACKER LOGIC ---
     elif menu == "Portfolio Tracker":
-        st.subheader("💼 Interactive Portfolio Tracker")
-        
         HOLDINGS_FILE = "portfolio_holdings.csv"
         HISTORY_FILE = "portfolio_history.csv"
         
@@ -211,7 +245,6 @@ else:
         tab_buy, tab_sell = st.tabs(["➕ Buy a Stock", "➖ Sell a Stock"])
         
         with tab_buy:
-            st.subheader("Record New Purchase")
             with st.form("buy_form", clear_on_submit=True):
                 clean_tickers = [t.replace(".NS", "") for t in NIFTY50_TICKERS]
                 ticker_input = st.selectbox("Select Stock", clean_tickers)
@@ -227,7 +260,6 @@ else:
                     st.rerun()
 
         with tab_sell:
-            st.subheader("Record a Sale")
             if not holdings_df.empty:
                 with st.form("sell_form", clear_on_submit=True):
                     unique_holdings = holdings_df["Ticker"].unique()
@@ -267,7 +299,7 @@ else:
         
         with display_holdings:
             if not holdings_df.empty:
-                with st.spinner("Fetching live prices..."):
+                with st.spinner("Fetching live prices and calculating 50 EMA stop loss..."):
                     live_holdings = []
                     total_invested, total_current_val = 0, 0
                     today = pd.to_datetime("today").date()
@@ -276,9 +308,18 @@ else:
                         ticker = row["Ticker"]
                         ns_ticker = ticker + ".NS" if not ticker.endswith(".NS") else ticker
                         try:
-                            stock_data = yf.Ticker(ns_ticker).history(period="5d")
-                            current_price = stock_data['Close'].iloc[-1]
-                        except: current_price = row["Buy Price"]
+                            stock_data = yf.Ticker(ns_ticker).history(period="6mo")
+                            current_price = float(stock_data['Close'].iloc[-1])
+                            ema_50 = float(ta.ema(stock_data['Close'], length=50).iloc[-1])
+                            
+                            if current_price < ema_50:
+                                status = "🛑 Sell (Below 50 EMA)"
+                            else:
+                                status = "✅ Hold"
+                        except: 
+                            current_price = row["Buy Price"]
+                            ema_50 = 0.0
+                            status = "⚠️ Data Error"
                             
                         try:
                             holding_days = (today - pd.to_datetime(row["Buy Date"]).date()).days
@@ -295,13 +336,13 @@ else:
                         live_holdings.append({
                             "Ticker": ticker, "Buy Date": row["Buy Date"], "Holding Period": holding_days_str,
                             "Quantity": row["Quantity"], "Avg Buy Price": round(row["Buy Price"], 2),
-                            "Live Price": round(current_price, 2), "Invested (₹)": round(invested, 2),
-                            "Current Value (₹)": round(current_val, 2), "Unrealized P&L (₹)": round(pnl, 2),
-                            "P&L (%)": f"{round((pnl/invested)*100, 2) if invested else 0}%"
+                            "Live Price": round(current_price, 2), "50 EMA Stop Loss": round(ema_50, 2), "Status": status,
+                            "Invested (₹)": round(invested, 2), "Current Value (₹)": round(current_val, 2), 
+                            "Unrealized P&L (₹)": round(pnl, 2), "P&L (%)": f"{round((pnl/invested)*100, 2) if invested else 0}%"
                         })
                         
                 styled_holdings_df = pd.DataFrame(live_holdings).style.map(color_pnl_column, subset=["Unrealized P&L (₹)"]).format(precision=2)
-                st.dataframe(styled_holdings_df, width="stretch")
+                st.dataframe(styled_holdings_df, hide_index=True, width="stretch")
                 
                 total_pnl = total_current_val - total_invested
                 col1, col2, col3 = st.columns(3)
@@ -313,7 +354,7 @@ else:
                 
         with display_history:
             if not history_df.empty:
-                edited_history = st.data_editor(history_df, num_rows="dynamic", width="stretch", key="history_editor")
+                edited_history = st.data_editor(history_df, num_rows="dynamic", hide_index=True, width="stretch", key="history_editor")
                 if st.button("Save History Changes"):
                     edited_history.to_csv(HISTORY_FILE, index=False)
                     st.success("Trade history updated successfully!")
@@ -327,7 +368,6 @@ else:
 
     # --- SECTOR HEAT MAP LOGIC ---
     elif menu == "Sector Heat Map":
-        st.subheader("🗺️ Nifty 50 Sector Heat Map")
         NIFTY_SECTORS = {
             "Financials": ["HDFCBANK.NS", "ICICIBANK.NS", "AXISBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "HDFCLIFE.NS", "SBILIFE.NS", "SHRIRAMFIN.NS", "JIOFIN.NS"],
             "IT": ["INFY.NS", "TCS.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS"],
@@ -356,53 +396,60 @@ else:
             if heat_data:
                 df_heat = pd.DataFrame(heat_data)
                 df_heat["Size"] = 1 
-                fig = px.treemap(df_heat, path=["Sector", "Stock"], values="Size", color="Change (%)", color_continuous_scale=[[0.0, "#d7191c"], [0.5, "#262626"], [1.0, "#1a9641"]], color_continuous_midpoint=0, custom_data=["Price", "Change (%)"])
-                fig.update_traces(texttemplate="<b>%{label}</b><br>%{customdata[1]}%", hovertemplate="<b>%{label}</b><br>Price: ₹%{customdata[0]:,}<br>Change: %{customdata[1]}%")
-                fig.update_layout(margin=dict(t=10, l=10, r=10, b=10), height=650, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                fig = px.treemap(
+                    df_heat, 
+                    path=["Sector", "Stock"], 
+                    values="Size", 
+                    color="Change (%)", 
+                    color_continuous_scale=[[0.0, "#d7191c"], [0.5, "#262626"], [1.0, "#1a9641"]], 
+                    color_continuous_midpoint=0, 
+                    custom_data=["Price", "Change (%)"]
+                )
+                fig.update_traces(
+                    texttemplate="<b>%{label}</b><br>%{customdata[1]}%", 
+                    hovertemplate="<b>%{label}</b><br>Price: ₹%{customdata[0]:,}<br>Change: %{customdata[1]}%"
+                )
+                fig.update_layout(
+                    margin=dict(t=10, l=10, r=10, b=10), 
+                    height=650, 
+                    paper_bgcolor="rgba(0,0,0,0)", 
+                    plot_bgcolor="rgba(0,0,0,0)"
+                )
                 st.plotly_chart(fig, width="stretch")
 
     # --- TECHNICAL CHARTS LOGIC ---
     elif menu == "Charts":
-        st.header("📈 Technical Analysis Charts")
-        clean_tickers = [t.replace(".NS", "") for t in NIFTY50_TICKERS]
-        chart_options = ["NIFTY 50 INDEX"] + clean_tickers
-        selected_asset = st.selectbox("Select Asset to Analyze", chart_options)
+        st.info("💡 **The 20 EMA and 50 EMA lines are drawn on the graph below!**")
+        selected_asset = st.selectbox("Select Asset to Analyze", ["NIFTY 50 INDEX"] + [t.replace(".NS", "") for t in NIFTY50_TICKERS])
         actual_ticker = "^NSEI" if selected_asset == "NIFTY 50 INDEX" else f"{selected_asset}.NS"
             
-        with st.spinner(f"Loading chart data for {selected_asset}..."):
+        with st.spinner(f"Loading chart and live PCR data for {selected_asset}..."):
             df = yf.Ticker(actual_ticker).history(period="6mo")
+            live_pcr = get_live_pcr(selected_asset)
+            
             if not df.empty:
-                delta = df['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).fillna(0)
-                loss = (-delta.where(delta < 0, 0)).fillna(0)
-                avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
-                avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
-                df['RSI'] = 100 - (100 / (1 + avg_gain / avg_loss))
-                df['RSI_SMA'] = df['RSI'].rolling(window=14).mean()
+                df['EMA_20'] = ta.ema(df['Close'], length=20)
+                df['EMA_50'] = ta.ema(df['Close'], length=50)
                 
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Current Price", f"₹{df['Close'].iloc[-1]:,.2f}")
-                col2.metric("Current RSI (14)", f"{df['RSI'].iloc[-1]:.2f}")
+                delta = df['Close'].diff()
+                gain, loss = delta.where(delta > 0, 0).fillna(0), -delta.where(delta < 0, 0).fillna(0)
+                avg_gain, avg_loss = gain.ewm(alpha=1/14, adjust=False).mean(), loss.ewm(alpha=1/14, adjust=False).mean()
+                df['RSI'] = 100 - (100 / (1 + avg_gain / avg_loss))
+                
+                c1, c2, c3, c4, c5 = st.columns(5)
+                c1.metric("Current Price", f"₹{df['Close'].iloc[-1]:,.2f}")
+                c2.metric("20 EMA (Yellow)", f"₹{df['EMA_20'].iloc[-1]:,.2f}" if not pd.isna(df['EMA_20'].iloc[-1]) else "N/A")
+                c3.metric("50 EMA (Orange)", f"₹{df['EMA_50'].iloc[-1]:,.2f}" if not pd.isna(df['EMA_50'].iloc[-1]) else "N/A")
+                c4.metric("Current RSI", f"{df['RSI'].iloc[-1]:.2f}")
+                c5.metric("Live PCR", live_pcr)
                 
                 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.6, 0.4])
-                fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']), row=1, col=1)
-                fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#00b4d8', width=2)), row=2, col=1)
-                fig.add_trace(go.Scatter(x=df.index, y=df['RSI_SMA'], line=dict(color='red', width=1.5)), row=2, col=1)
+                fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price"), row=1, col=1)
+                
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], line=dict(color='yellow', width=1.5), name="20 EMA"), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1.5), name="50 EMA"), row=1, col=1)
+                
+                fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#00b4d8', width=2), name="RSI"), row=2, col=1)
                 fig.update_layout(height=750, template="plotly_dark", margin=dict(l=20, r=20, t=40, b=20), xaxis_rangeslider_visible=False, showlegend=False)
+                
             st.plotly_chart(fig, width="stretch")
-
-    # --- LIVE TV LOGIC ---
-    elif menu == "Live TV":
-        st.header("📺 Live Market News")
-        st.markdown("Watch live broadcasts directly inside your dashboard while you analyze your trades.")
-        st.info("💡 **Pro Tip:** The dashboard is now hardcoded to automatically load **CNBC Awaaz** Live. You can still paste a different YouTube link below if you want to watch something else!")
-        
-        default_link = "https://www.youtube.com/@cnbcawaaz/live"
-        video_url = st.text_input("YouTube Live Link:", value=default_link)
-        
-        if video_url:
-            with st.spinner("Connecting to live stream..."):
-                try:
-                    st.video(video_url)
-                except Exception as e:
-                    st.error("Could not load the video. Make sure it is a valid YouTube link.")
